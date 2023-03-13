@@ -1,0 +1,85 @@
+name: web deploy
+
+on: 
+  workflow_dispatch:
+    inputs:
+      env_name:
+        type: choice
+        required: true
+        options:
+          - DEV
+          - PROD
+
+
+env: 
+  DEPLOY_PATH: 'c:/ws/hw'
+
+
+jobs:
+  build_and_deply:
+    runs-on: [self-hosted, wiis]
+
+
+    steps:
+      # Remote connection to server via powershell
+      # https://docs.microsoft.com/en-us/powershell/scripting/learn/ps101/08-powershell-remoting?view=powershell-7.2
+#       - name: stop iis server
+#         run: iisreset /stop
+#         shell: powershell
+        
+      - name: checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref }}
+
+      - name: build
+        run: |
+          dotnet restore
+          dotnet build --configuration Release
+#          Remove-Item -Recurse -Force -Path "${{ secrets.DEPLOY_PATH }}\*"
+          
+        shell: powershell
+
+      
+
+      # - name: install dotnet
+      #  uses: actions/setup-dotnet@v2
+      #  with:
+      #    dotnet-version: '6.0.x'              
+
+      - name: prepare
+        run: |          
+          Compress-Archive -Path App_offline.htm -DestinationPath App_offline.htm.zip
+          dotnet publish -c Release -o myapp4          
+          cp myapp4/t.exe myapp4/wwwroot/lib
+          cp myapp4/t.exe myapp4\wwwroot\lib\bootstrap\dist\
+          # Get-ChildItem -Path myapp4\* -Recurse |
+          Compress-Archive -Path myapp4\* -DestinationPath myapp4.zip             
+        shell: powershell
+      - name: publish to remote server
+        uses: snsinahub-org/iis-webdeploy@development
+        with:
+          source: 'App_offline.htm.zip'
+          destination: 'C:\ws\hw-sam\App_offline.htm'
+          remote_url: 'https://192.168.1.158:8172/msdeploy.axd?site=hw-dev'
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASS }}
+        
+      - name: publish to remote server
+        uses: snsinahub-org/iis-webdeploy@development
+        with:
+          source: 'myapp4.zip'
+          destination: 'C:\ws\hw-sam'
+          remote_url: 'https://192.168.1.158:8172/msdeploy.axd?site=hw-dev'
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASS }}
+
+#       - name: start iis server
+#         run: iisreset /start
+#         shell: powershell
+
+
+
+
+
+
